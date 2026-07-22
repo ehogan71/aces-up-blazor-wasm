@@ -1,0 +1,45 @@
+# Build output
+**/[Bb]in/
+**/[Oo]bj/
+**/[Ll]og/
+**/[Ll]ogs/
+
+# Test output
+**/TestResults/
+**/*.trx
+**/*.coverage
+**/*.coveragexml
+**/coverage.cobertura.xml
+
+# User-specific files
+**/*.user
+**/*.suo
+**/*.userprefs
+**/*.rsuser
+**/*.userosscache
+**/*.sln.docstates
+
+# VS Code / IDE settings
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# NuGet
+**/packages/
+*.nupkg
+*.snupkg
+
+# Dotnet local tools and caches
+**/.dotnet/
+**/.store/
+
+# Generated static web assets from build/publish
+**/publish/
+**/wwwroot/_framework/
+**/wwwroot/_content/
+**/dist

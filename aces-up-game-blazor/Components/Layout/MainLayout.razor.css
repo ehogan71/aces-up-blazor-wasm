@@ -1,0 +1,42 @@
+.page {
+  min-height: 100vh;
+  background: var(--table-green-dark);
+}
+
+main {
+  flex: 1;
+}
+
+.top-row {
+  background: #16211c;
+  border-bottom: 1px solid #2d4339;
+  justify-content: flex-start;
+  min-height: 3.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.content {
+  padding: 0;
+}
+
+#blazor-error-ui {
+  color-scheme: light only;
+  background: lightyellow;
+  bottom: 0;
+  box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+  box-sizing: border-box;
+  display: none;
+  left: 0;
+  padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+  position: fixed;
+  width: 100%;
+  z-index: 1000;
+}
+
+#blazor-error-ui .dismiss {
+  cursor: pointer;
+  position: absolute;
+  right: 0.75rem;
+  top: 0.5rem;
+}

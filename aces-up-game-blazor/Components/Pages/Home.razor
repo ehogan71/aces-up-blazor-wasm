@@ -1,0 +1,590 @@
+﻿@attribute [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
+@page "/"
+@using aces_up_game_blazor.Core
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Aces Up</PageTitle>
+
+<div class="aces-table" id="casino-felt">
+	<button type="button" class="settings-cog-button" @onclick="OpenSettings" aria-label="Open settings" title="Settings">
+		⚙
+	</button>
+
+	<div class="game-board">
+		@for (var pileIndex = 0; pileIndex < _gameState.Piles.Count; pileIndex++)
+		{
+			var currentPileIndex = pileIndex;
+			var pile = _gameState.Piles[currentPileIndex];
+			var pilePlayableAction = GameEngine.GetTopCardPlayableAction(_gameState, currentPileIndex);
+			var pileCanPlay = pilePlayableAction is not null;
+			var topCardIndex = pile.Count - 1;
+			<div class="pile-slot @(pileCanPlay ? "pile-slot--playable" : string.Empty)"
+				 @onclick="@(() => HandleTopCardClick(currentPileIndex))">
+				<div class="pile">
+					@for (var cardIndex = 0; cardIndex < pile.Count; cardIndex++)
+					{
+						var card = pile[cardIndex];
+						var isTopCard = cardIndex == pile.Count - 1;
+						var playableAction = isTopCard ? pilePlayableAction : null;
+						var canPlay = playableAction is not null;
+						var shouldAnimateDeal = _animateDeal && isTopCard && _lastDealtCardKeys.Contains(CardKey(card));
+						var isDiscardingSourceTopCard =
+							isTopCard &&
+							_discardAnimation is not null &&
+							_discardAnimation.SourcePileIndex == currentPileIndex &&
+							CardKey(_discardAnimation.Card) == CardKey(card);
+
+						<div class="pile-card @(canPlay ? "pile-card--playable" : string.Empty)"
+							 id="@GetPileCardElementId(currentPileIndex, cardIndex)"
+							 style="@($"top: calc({cardIndex} * var(--pile-feather-offset)); opacity: {(isDiscardingSourceTopCard ? 0 : 1)}; pointer-events: {(isDiscardingSourceTopCard ? "none" : "auto")};")">
+							@if (_showPlayableIndicators && playableAction is not null && !shouldAnimateDeal)
+							{
+								<div class="playable-indicator @(playableAction == PlayableAction.Discard ? "playable-indicator--discard" : "playable-indicator--relocate")"
+									 aria-label="@(playableAction == PlayableAction.Discard ? "discard available" : "relocate available")"
+									 title="@playableAction" />
+							}
+							<div class="card-frame @(shouldAnimateDeal ? "deal-animation" : string.Empty)">
+								<img src="@card.ImagePath" alt="@($"{card.Rank} of {card.SuitSymbol}")" class="card-image" draggable="false" />
+							</div>
+						</div>
+					}
+				</div>
+			</div>
+		}
+	</div>
+
+	<div class="draw-discard-board">
+		<div id="draw-slot-origin" class="draw-slot" @onclick="HandleDeal">
+			@if (_gameState.DrawPile.Count > 0)
+			{
+				<div class="@CardBackClass"></div>
+				@if (_showCardCounts)
+				{
+					<div class="card-count-badge">@_gameState.DrawPile.Count</div>
+				}
+			}
+			else
+			{
+				<div class="empty-slot">Empty</div>
+			}
+		</div>
+
+		<div class="undo-slot">
+			<button type="button"
+					class="undo-button"
+					disabled="@BottomButtonDisabled"
+					@onclick="HandleBottomButtonClick">
+				@BottomButtonLabel
+			</button>
+		</div>
+
+		<div id="discard-slot-origin" class="discard-slot">
+			@if (_gameState.DiscardPile.Count > 0)
+			{
+				<div class="@CardBackClass"></div>
+				@if (_showCardCounts)
+				{
+					<div class="card-count-badge">@_gameState.DiscardPile.Count</div>
+				}
+			}
+			else
+			{
+				<div class="empty-slot">Empty</div>
+			}
+		</div>
+	</div>
+
+	@if (_isGameOverModalOpen && CurrentOutcome is not null)
+	{
+		<div class="settings-dialog-backdrop modal-backdrop">
+			<div class="settings-dialog modal-card game-over-dialog" role="dialog" aria-modal="true">
+				<h2 class="settings-title">@(CurrentOutcome == GameOutcome.Won ? "Congratulations! You won" : "Sorry, try again")</h2>
+				@RenderStats()
+				<div class="modal-actions">
+					<button type="button" @onclick="HandleNewGame">New Game</button>
+					<button type="button" @onclick="DismissGameOver">Dismiss</button>
+				</div>
+			</div>
+		</div>
+	}
+
+	@if (_isSettingsOpen)
+	{
+		<div class="settings-dialog-backdrop modal-backdrop">
+			<div class="settings-dialog modal-card settings-modal" role="dialog" aria-modal="true">
+				<button type="button" class="settings-done-button" @onclick="CloseSettings">Done</button>
+				<h2 class="settings-title">Settings</h2>
+
+				<section class="settings-section">
+					<h3>Game Play</h3>
+
+					<label class="settings-toggle-row">
+						<div class="settings-toggle-copy">
+							<span class="settings-toggle-label">Playable indicators</span>
+							<span class="settings-toggle-description">show the dot on cards that can be played</span>
+						</div>
+						<button type="button"
+								class="settings-toggle @(_showPlayableIndicators ? "settings-toggle--on" : string.Empty)"
+								@onclick="TogglePlayableIndicators"
+								aria-pressed="@_showPlayableIndicators">
+							<span class="settings-toggle-knob" />
+						</button>
+					</label>
+
+					<label class="settings-toggle-row">
+						<div class="settings-toggle-copy">
+							<span class="settings-toggle-label">Card counts</span>
+						</div>
+						<button type="button"
+								class="settings-toggle @(_showCardCounts ? "settings-toggle--on" : string.Empty)"
+								@onclick="ToggleCardCounts"
+								aria-pressed="@_showCardCounts">
+							<span class="settings-toggle-knob" />
+						</button>
+					</label>
+				</section>
+
+				<section class="settings-section">
+					<h3>Card Backs</h3>
+					<div class="settings-card-back-buttons">
+						<button type="button"
+								class="settings-card-back-button settings-card-back-button--red @(_cardBackColor == "red" ? "settings-card-back-button--selected" : string.Empty)"
+								@onclick='() => SelectCardBackColor("red")'
+								aria-pressed="@(_cardBackColor == "red")">
+							Red
+						</button>
+						<button type="button"
+								class="settings-card-back-button settings-card-back-button--blue @(_cardBackColor == "blue" ? "settings-card-back-button--selected" : string.Empty)"
+								@onclick='() => SelectCardBackColor("blue")'
+								aria-pressed="@(_cardBackColor == "blue")">
+							Blue
+						</button>
+					</div>
+				</section>
+
+				<section class="settings-section">
+					<h3>Statistics</h3>
+					@RenderStats(true)
+				</section>
+
+				<section class="settings-section">
+					<h3>Site Info</h3>
+					<p>Developed by Edward Hogan</p>
+					<p>Powered by Blazor</p>
+					<p>Version v1.0.0</p>
+				</section>
+			</div>
+		</div>
+	}
+
+	@if (_discardAnimation is not null)
+	{
+		<div class="card-frame discard-animation-card @(_discardAnimation.IsFlying ? "discard-animation-card--fly" : string.Empty)"
+			 style="@($"position: fixed; left: {(_discardAnimation.IsFlying ? _discardAnimation.TargetLeft : _discardAnimation.SourceLeft)}px; top: {(_discardAnimation.IsFlying ? _discardAnimation.TargetTop : _discardAnimation.SourceTop)}px; width: {_discardAnimation.SourceWidth}px; height: {_discardAnimation.SourceHeight}px;")">
+			<img src="@_discardAnimation.Card.ImagePath" alt="@($"{_discardAnimation.Card.Rank} of {_discardAnimation.Card.SuitSymbol}")" class="card-image" draggable="false" />
+		</div>
+	}
+</div>
+
+@code {
+	private sealed record PersistedSettings(bool ShowPlayableIndicators, bool ShowCardCounts, string CardBackColor);
+
+	private sealed record PersistedStatistics(int GamesStarted, int GamesCompleted, int GamesWon);
+
+	private sealed record ElementRect(double Left, double Top, double Width, double Height);
+
+	private sealed record DiscardAnimationState(
+		Card Card,
+		int SourcePileIndex,
+		double SourceLeft,
+		double SourceTop,
+		double SourceWidth,
+		double SourceHeight,
+		double TargetLeft,
+		double TargetTop,
+		bool IsFlying);
+
+	private readonly Random _random = new();
+	private GameState _gameState = new();
+	private readonly List<GameState> _undoStack = [];
+	private readonly HashSet<string> _lastDealtCardKeys = [];
+	private bool _hasLoadedBrowserState;
+	private bool _suppressPersistence;
+	private bool _isSettingsOpen;
+	private bool _isGameOverModalOpen;
+	private bool _animateDeal;
+	private bool _showPlayableIndicators = true;
+	private bool _showCardCounts = true;
+	private string _cardBackColor = "red";
+	private DiscardAnimationState? _discardAnimation;
+	private GameState? _pendingDiscardState;
+	private GameOutcome? _previousOutcome;
+	private int _gamesStarted;
+	private int _gamesCompleted;
+	private int _gamesWon;
+	private int _gameSessionId;
+	private IJSObjectReference? _module;
+
+	private GameOutcome? CurrentOutcome => GameEngine.GetGameOutcome(_gameState);
+
+	private string BottomButtonLabel => CurrentOutcome is null ? "Undo" : "New Game";
+
+	private bool BottomButtonDisabled => CurrentOutcome is null && _undoStack.Count == 0;
+
+	private string CardBackClass => _cardBackColor == "blue" ? "card-back card-back--blue" : "card-back card-back--red";
+
+	private int WinRate => _gamesCompleted == 0 ? 0 : (int)Math.Round((double)_gamesWon / _gamesCompleted * 100);
+
+	private const string SettingsStorageKey = "aces-up-game-settings";
+	private const string StatisticsStorageKey = "aces-up-game-statistics";
+
+	protected override void OnInitialized()
+	{
+		_gamesStarted = 1;
+		_gameSessionId = 1;
+		_gameState = GameEngine.CreateInitialState(_random);
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (!firstRender || _hasLoadedBrowserState)
+		{
+			return;
+		}
+
+		_suppressPersistence = true;
+
+		var settings = await LoadSettingsAsync();
+		_showPlayableIndicators = settings.ShowPlayableIndicators;
+		_showCardCounts = settings.ShowCardCounts;
+		_cardBackColor = settings.CardBackColor == "blue" ? "blue" : "red";
+
+		var statistics = await LoadStatisticsAsync();
+		_gamesStarted = statistics.GamesStarted == 0 ? 1 : statistics.GamesStarted;
+		_gamesCompleted = statistics.GamesCompleted;
+		_gamesWon = statistics.GamesWon;
+
+		_hasLoadedBrowserState = true;
+		_suppressPersistence = false;
+
+		await PersistSettingsAsync();
+		await PersistStatisticsAsync();
+
+		await InvokeAsync(StateHasChanged);
+	}
+
+	private async Task HandleDeal()
+	{
+		if (CurrentOutcome is not null || _animateDeal || _discardAnimation is not null)
+		{
+			return;
+		}
+
+		var (newState, dealtCards) = GameEngine.DealCards(_gameState);
+		if (dealtCards.Count == 0)
+		{
+			return;
+		}
+
+		PushUndo();
+		_animateDeal = true;
+		_lastDealtCardKeys.Clear();
+		foreach (var dealtCard in dealtCards)
+		{
+			_lastDealtCardKeys.Add(CardKey(dealtCard));
+		}
+		_gameState = newState;
+		UpdateGameOutcomeState();
+		await InvokeAsync(StateHasChanged);
+		await Task.Delay(400);
+		_animateDeal = false;
+		_lastDealtCardKeys.Clear();
+		await InvokeAsync(StateHasChanged);
+	}
+
+	private async Task HandleTopCardClick(int pileIndex)
+	{
+		if (_animateDeal || _discardAnimation is not null)
+		{
+			return;
+		}
+
+		var action = GameEngine.GetTopCardPlayableAction(_gameState, pileIndex);
+		if (action is null)
+		{
+			return;
+		}
+
+		PushUndo();
+
+		if (action == PlayableAction.Discard)
+		{
+			var (newState, discardedCard) = GameEngine.DiscardTopCard(_gameState, pileIndex);
+			if (discardedCard is null)
+			{
+				_undoStack.RemoveAt(_undoStack.Count - 1);
+				return;
+			}
+
+			var sourceRect = await GetElementRectAsync(GetPileCardElementId(pileIndex, _gameState.Piles[pileIndex].Count - 1));
+			var targetRect = await GetElementRectAsync("discard-slot-origin");
+
+			if (sourceRect is null || targetRect is null)
+			{
+				_gameState = newState;
+				UpdateGameOutcomeState();
+				return;
+			}
+
+			_pendingDiscardState = newState;
+			_discardAnimation = new DiscardAnimationState(
+				discardedCard,
+				pileIndex,
+				sourceRect.Left,
+				sourceRect.Top,
+				sourceRect.Width,
+				sourceRect.Height,
+				targetRect.Left,
+				targetRect.Top,
+				false);
+
+			await InvokeAsync(StateHasChanged);
+			await Task.Yield();
+			_discardAnimation = _discardAnimation with { IsFlying = true };
+			await InvokeAsync(StateHasChanged);
+			await Task.Delay(380);
+			_gameState = _pendingDiscardState;
+			_pendingDiscardState = null;
+			_discardAnimation = null;
+		}
+		else
+		{
+			var (newState, movedCard, _) = GameEngine.RelocateTopCard(_gameState, pileIndex);
+			if (movedCard is null)
+			{
+				_undoStack.RemoveAt(_undoStack.Count - 1);
+				return;
+			}
+
+			_gameState = newState;
+			UpdateGameOutcomeState();
+			await InvokeAsync(StateHasChanged);
+			return;
+		}
+
+		UpdateGameOutcomeState();
+		await InvokeAsync(StateHasChanged);
+	}
+
+	private void HandleBottomButtonClick()
+	{
+		if (CurrentOutcome is null)
+		{
+			HandleUndo();
+			return;
+		}
+
+		HandleNewGame();
+	}
+
+	private void HandleUndo()
+	{
+		if (_undoStack.Count == 0 || _animateDeal || _discardAnimation is not null)
+		{
+			return;
+		}
+
+		_gameState = _undoStack[^1];
+		_undoStack.RemoveAt(_undoStack.Count - 1);
+		_isGameOverModalOpen = false;
+		_previousOutcome = GameEngine.GetGameOutcome(_gameState);
+	}
+
+	private void HandleNewGame()
+	{
+		_isSettingsOpen = false;
+		_isGameOverModalOpen = false;
+		_undoStack.Clear();
+		_animateDeal = false;
+		_lastDealtCardKeys.Clear();
+		_discardAnimation = null;
+		_pendingDiscardState = null;
+		_gameSessionId++;
+		_gamesStarted++;
+		_previousOutcome = null;
+		_gameState = GameEngine.CreateInitialState(_random);
+		_ = PersistStatisticsAsync();
+	}
+
+	private void DismissGameOver()
+	{
+		_isGameOverModalOpen = false;
+	}
+
+	private void OpenSettings()
+	{
+		_isSettingsOpen = true;
+	}
+
+	private void CloseSettings()
+	{
+		_isSettingsOpen = false;
+	}
+
+	private void HandleClearStatistics()
+	{
+		_gamesStarted = 0;
+		_gamesCompleted = 0;
+		_gamesWon = 0;
+		_ = PersistStatisticsAsync();
+		HandleNewGame();
+	}
+
+	private void TogglePlayableIndicators()
+	{
+		_showPlayableIndicators = !_showPlayableIndicators;
+		_ = PersistSettingsAsync();
+	}
+
+	private void ToggleCardCounts()
+	{
+		_showCardCounts = !_showCardCounts;
+		_ = PersistSettingsAsync();
+	}
+
+	private void SelectCardBackColor(string color)
+	{
+		_cardBackColor = color == "blue" ? "blue" : "red";
+		_ = PersistSettingsAsync();
+	}
+
+	private RenderFragment RenderStats(bool showClearStatistics = false) => builder =>
+	{
+		builder.OpenElement(0, "div");
+		builder.AddAttribute(1, "class", "game-statistics");
+
+		builder.OpenElement(2, "div");
+		builder.AddAttribute(3, "class", "game-statistics-row");
+		builder.OpenElement(4, "span");
+		builder.AddAttribute(5, "class", "game-statistics-label");
+		builder.AddMarkupContent(6, "Games started");
+		builder.CloseElement();
+		builder.OpenElement(7, "span");
+		builder.AddAttribute(8, "class", "game-statistics-value");
+		builder.AddMarkupContent(9, $"&nbsp;{_gamesStarted}");
+		builder.CloseElement();
+		builder.CloseElement();
+
+		builder.OpenElement(10, "div");
+		builder.AddAttribute(11, "class", "game-statistics-row");
+		builder.OpenElement(12, "span");
+		builder.AddAttribute(13, "class", "game-statistics-label");
+		builder.AddMarkupContent(14, "Games won/completed (%won)");
+		builder.CloseElement();
+		builder.OpenElement(15, "span");
+		builder.AddAttribute(16, "class", "game-statistics-value");
+		builder.AddMarkupContent(17, $"&nbsp;{_gamesWon}/{_gamesCompleted} ({WinRate}%)");
+		builder.CloseElement();
+		builder.CloseElement();
+
+		if (showClearStatistics)
+		{
+			builder.OpenElement(18, "div");
+			builder.AddAttribute(19, "class", "game-statistics-clear-wrap");
+			builder.OpenElement(20, "button");
+			builder.AddAttribute(21, "type", "button");
+			builder.AddAttribute(22, "class", "game-statistics-clear-button");
+			builder.AddAttribute(23, "onclick", EventCallback.Factory.Create(this, HandleClearStatistics));
+			builder.AddContent(24, "Clear Statistics*");
+			builder.CloseElement();
+			builder.OpenElement(25, "p");
+			builder.AddAttribute(26, "class", "game-statistics-clear-note");
+			builder.AddContent(27, "* This action will start a new game");
+			builder.CloseElement();
+			builder.CloseElement();
+		}
+
+		builder.CloseElement();
+	};
+
+	private void PushUndo()
+	{
+		_undoStack.Add(_gameState.DeepClone());
+	}
+
+	private async Task<IJSObjectReference> GetModuleAsync()
+	{
+		_module ??= await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./gameAnimations.js");
+		return _module;
+	}
+
+	private async Task<PersistedSettings> LoadSettingsAsync()
+	{
+		var module = await GetModuleAsync();
+		var settings = await module.InvokeAsync<PersistedSettings?>("readJson", SettingsStorageKey);
+		return settings ?? new PersistedSettings(true, true, "red");
+	}
+
+	private async Task<PersistedStatistics> LoadStatisticsAsync()
+	{
+		var module = await GetModuleAsync();
+		var statistics = await module.InvokeAsync<PersistedStatistics?>("readJson", StatisticsStorageKey);
+		return statistics ?? new PersistedStatistics(0, 0, 0);
+	}
+
+	private async Task PersistSettingsAsync()
+	{
+		if (!_hasLoadedBrowserState || _suppressPersistence)
+		{
+			return;
+		}
+
+		var module = await GetModuleAsync();
+		await module.InvokeVoidAsync("writeJson", SettingsStorageKey, new PersistedSettings(_showPlayableIndicators, _showCardCounts, _cardBackColor));
+	}
+
+	private async Task PersistStatisticsAsync()
+	{
+		if (!_hasLoadedBrowserState || _suppressPersistence)
+		{
+			return;
+		}
+
+		var module = await GetModuleAsync();
+		await module.InvokeVoidAsync("writeJson", StatisticsStorageKey, new PersistedStatistics(_gamesStarted, _gamesCompleted, _gamesWon));
+	}
+
+	private async Task<ElementRect?> GetElementRectAsync(string elementId)
+	{
+		var module = await GetModuleAsync();
+		return await module.InvokeAsync<ElementRect?>("getBoundingRectById", elementId);
+	}
+
+	private static string CardKey(Card card) => $"{card.SuitSymbol}-{card.Rank}";
+
+	private static string GetPileCardElementId(int pileIndex, int cardIndex) => $"pile-card-{pileIndex}-{cardIndex}";
+
+	private void UpdateGameOutcomeState()
+	{
+		var currentOutcome = GameEngine.GetGameOutcome(_gameState);
+
+		if (currentOutcome is not null && currentOutcome != _previousOutcome)
+		{
+			_isGameOverModalOpen = true;
+			_gamesCompleted++;
+
+			if (currentOutcome == GameOutcome.Won)
+			{
+				_gamesWon++;
+			}
+		}
+
+		if (currentOutcome is null)
+		{
+			_isGameOverModalOpen = false;
+		}
+
+		_previousOutcome = currentOutcome;
+		_ = PersistStatisticsAsync();
+	}
+}
