@@ -36,7 +36,7 @@ jobs:
         run: dotnet workload install wasm-tools
 
       - name: Publish Blazor Site
-        run: dotnet publish aces_up_game_blazor.csproj -c Release -o publish
+        run: dotnet publish aces-up-game-blazor/aces-up-game-blazor.csproj -c Release -o publish
 
       - name: Upload published files
         uses: actions/upload-pages-artifact@v3
