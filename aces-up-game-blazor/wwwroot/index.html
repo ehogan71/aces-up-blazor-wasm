@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Aces Up</title>
-    <base href="/" />
+    <base href="/aces-up-blazor-wasm/" />
     <script>
       (function () {
         var base = document.querySelector("base");
@@ -15,7 +15,7 @@
           location.hostname === "127.0.0.1";
 
         // Local runs serve static assets from root; GitHub Pages serves from the repo path.
-        base.setAttribute("href", isLocalHost ? "/" : "/aces-up-game-blazor/");
+        base.setAttribute("href", isLocalHost ? "/" : "/aces-up-blazor-wasm/");
       })();
     </script>
     <link rel="icon" type="image/png" href="favicon.png" />
@@ -32,6 +32,14 @@
       <span class="dismiss">x</span>
     </div>
 
-    <script src="_framework/blazor.webassembly.js"></script>
+    <script src="_framework/blazor.webassembly.js" autostart="false"></script>
+    <script>
+      Blazor.start({
+        loadBootResource: function (type, name, defaultUri, integrity) {
+          return defaultUri;
+        },
+        environment: "Production",
+      });
+    </script>
   </body>
 </html>
