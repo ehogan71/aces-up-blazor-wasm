@@ -2,6 +2,8 @@
 
 Aces Up Solitaire implemented with **Blazor WebAssembly** (.NET 10).
 
+Demo: https://ehogan71.github.io/aces-up-blazor-wasm/
+
 This repository contains:
 
 - `aces-up-game-blazor/`: the Blazor WebAssembly app
@@ -85,7 +87,7 @@ This app is a standalone Blazor WebAssembly app and can be hosted as static file
 `aces-up-game-blazor/wwwroot/index.html` includes a script that sets `<base href>` dynamically:
 
 - `"/"` on localhost
-- `"/aces-up-game-blazor/"` on non-localhost hosts
+- `"/aces-up-blazor-wasm/"` on non-localhost hosts
 
 If your deployed repository or site path is different, update that non-localhost base path value accordingly.
 
@@ -120,6 +122,10 @@ aces-up-game/
   docs/                         # Screenshots and docs
 ```
 
+## Demo
+
+Live demo: https://ehogan71.github.io/aces-up-blazor-wasm/
+
 ## License
 
-No license file is included yet. Add one (for example MIT) before publishing publicly if needed.
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
